@@ -1,5 +1,11 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend, LineChart, Line, AreaChart, Area } from "recharts";
+import { createClient } from "@supabase/supabase-js";
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend, AreaChart, Area } from "recharts";
+
+// ── Supabase ──────────────────────────────────────────────────
+const SUPA_URL  = "https://pyahxfawnztsaekoqdxx.supabase.co";
+const SUPA_KEY  = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB5YWh4ZmF3bnp0c2Fla29xZHh4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMyODU0MjUsImV4cCI6MjA4ODg2MTQyNX0.EsB-FS5MpTE5hgu2aV5KV2AYnddYNygG5uIT8JTeXE8";
+const supabase  = createClient(SUPA_URL, SUPA_KEY);
 
 // ── Design tokens ─────────────────────────────────────────────
 const C = {
@@ -21,7 +27,7 @@ const C = {
   sub:     "#8899bb",
   muted:   "#3a4a66",
 };
-const PA = ["#00f0ff","#ff2d78"]; // person colors
+const PA  = ["#00f0ff","#ff2d78"];
 const CAD = "CA$";
 const fmt  = v => `${CAD}${Math.abs(v).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`;
 const fmtS = v => { const a=Math.abs(v); return a>=1000?`${CAD}${(a/1000).toFixed(1)}k`:`${CAD}${a.toFixed(0)}`; };
@@ -49,17 +55,11 @@ const CATS = [
   {id:"income_salary",icon:"💼",label:"Salary",           label_tr:"Maaş",             color:C.cyan,   glow:"0,240,255"},
   {id:"income_tr",    icon:"🇹🇷",label:"TR",              label_tr:"TR",               color:C.purple, glow:"185,79,255"},
 ];
-const INC_IDS = ["income_gov","income_salary","income_tr"];
+const INC_IDS  = ["income_gov","income_salary","income_tr"];
 const EXP_CATS = CATS.filter(c=>!INC_IDS.includes(c.id));
 const INC_CATS = CATS.filter(c=>INC_IDS.includes(c.id));
-const SK = "paralog-v7";
 const DN = ["Alex","Sam"];
 const IF = {type:"expense",amount:"",category:"food_delivery",incomeCategory:"income_salary",note:"",date:new Date().toISOString().split("T")[0],isRecurring:false,person:0};
-
-const store = {
-  get: k => { try { const v=localStorage.getItem(k); return v?JSON.parse(v):null; } catch { return null; } },
-  set: (k,v) => { try { localStorage.setItem(k,JSON.stringify(v)); } catch {} },
-};
 
 // ── Aurora ────────────────────────────────────────────────────
 function Aurora() {
@@ -120,27 +120,22 @@ function Card({children,color,style,onClick,glow}){
       boxShadow:h&&glow?`0 0 28px rgba(${glow},.2),inset 0 0 30px rgba(255,255,255,.015)`:"inset 0 0 30px rgba(255,255,255,.01)",
       ...style}}>{children}</div>;
 }
-
 function Avatar({name,color,size=32,ring}){
   return <div style={{width:size,height:size,borderRadius:"50%",background:`${color}1a`,
     border:`2px solid ${ring?color:color+"44"}`,display:"flex",alignItems:"center",justifyContent:"center",
     fontSize:size*.38,fontWeight:800,color,flexShrink:0,
     boxShadow:ring?`0 0 12px ${color}55`:"none",transition:"all .2s"}}>{(name||"?")[0].toUpperCase()}</div>;
 }
-
 function Badge({children,color}){
   return <span style={{fontSize:10,fontWeight:700,padding:"2px 7px",borderRadius:5,background:`${color}18`,
     color,border:`1px solid ${color}33`,letterSpacing:.4,whiteSpace:"nowrap"}}>{children}</span>;
 }
-
 function GlowBar({pct,color,h=4,style}){
   return <div style={{width:"100%",height:h,background:"rgba(255,255,255,0.06)",borderRadius:99,overflow:"hidden",...style}}>
     <div style={{height:"100%",width:`${Math.min(pct,100)}%`,borderRadius:99,background:color,
       boxShadow:`0 0 8px ${color}80`,transition:"width .6s ease"}}/>
   </div>;
 }
-
-// Ring chart component
 function RingChart({pct,color,size=80,strokeW=8,label,sublabel}){
   const r=size/2-strokeW/2, circ=2*Math.PI*r;
   const dash=circ*(pct/100), gap=circ-dash;
@@ -159,8 +154,6 @@ function RingChart({pct,color,size=80,strokeW=8,label,sublabel}){
     </div>
   );
 }
-
-// Custom tooltip
 function TTip({active,payload,label}){
   if(!active||!payload?.length)return null;
   return <div style={{background:"rgba(3,6,15,.96)",border:"1px solid rgba(255,255,255,.1)",borderRadius:12,padding:"10px 14px",fontSize:12,backdropFilter:"blur(20px)"}}>
@@ -169,7 +162,6 @@ function TTip({active,payload,label}){
   </div>;
 }
 
-// ── NAV config ────────────────────────────────────────────────
 const NAV = [
   {id:"overview",  icon:"◈", label:"Overview",  label_tr:"Özet"},
   {id:"people",    icon:"⊕", label:"People",    label_tr:"Kişiler"},
@@ -180,16 +172,17 @@ const NAV = [
 
 // ── MAIN APP ──────────────────────────────────────────────────
 export default function App() {
-  const [txs,setTxs]       = useState([]);
-  const [lang,setLang]     = useState("en");
-  const [view,setView]     = useState("overview");
-  const [showForm,setForm] = useState(false);
-  const [showSet,setSet]   = useState(false);
-  const [selMo,setSelMo]   = useState(gmk(new Date()));
-  const [loaded,setLoaded] = useState(false);
-  const [fCat,setFCat]     = useState("all");
-  const [fPer,setFPer]     = useState("all");
-  const [toast,setToast]   = useState(null);
+  const [txs,setTxs]           = useState([]);
+  const [lang,setLang]         = useState("en");
+  const [view,setView]         = useState("overview");
+  const [showForm,setForm]     = useState(false);
+  const [showSet,setSet]       = useState(false);
+  const [selMo,setSelMo]       = useState(gmk(new Date()));
+  const [loaded,setLoaded]     = useState(false);
+  const [syncing,setSyncing]   = useState(false);
+  const [fCat,setFCat]         = useState("all");
+  const [fPer,setFPer]         = useState("all");
+  const [toast,setToast]       = useState(null);
   const [budgets,setBudgets]   = useState({});
   const [recurring,setRec]     = useState([]);
   const [editBud,setEditBud]   = useState(null);
@@ -197,36 +190,86 @@ export default function App() {
   const [names,setNames]       = useState(DN);
   const [nameIn,setNameIn]     = useState(DN);
   const [form,setF]            = useState(IF);
+
   const tr = lang==="tr";
   const mo = tr?MO_TR:MO;
   const ml = (k,short=false) => { const [y,m]=k.split("-"); return short?mo[+m-1]:`${mo[+m-1]} ${y}`; };
   const cl = c => tr?c.label_tr:c.label;
   const pn = i => names[i]||DN[i];
 
+  // ── Load all data from Supabase ───────────────────────────
   useEffect(()=>{
-    const d=store.get(SK);
-    if(d){setTxs(d.txs||[]);setLang(d.lang||"en");setBudgets(d.budgets||{});setRec(d.recurring||[]);if(d.names)setNames(d.names);}
-    setLoaded(true);
+    async function loadAll(){
+      setSyncing(true);
+      try {
+        // transactions
+        const {data:txData} = await supabase.from("transactions").select("*").order("created_at",{ascending:false});
+        if(txData) setTxs(txData);
+
+        // recurring
+        const {data:recData} = await supabase.from("recurring").select("*");
+        if(recData) setRec(recData);
+
+        // settings (lang, budgets, names)
+        const {data:setData} = await supabase.from("settings").select("*");
+        if(setData){
+          const langRow    = setData.find(r=>r.key==="lang");
+          const budRow     = setData.find(r=>r.key==="budgets");
+          const namesRow   = setData.find(r=>r.key==="names");
+          if(langRow)  setLang(langRow.value);
+          if(budRow)   setBudgets(budRow.value||{});
+          if(namesRow) setNames(namesRow.value||DN);
+        }
+      } catch(e){ console.error("Load error",e); }
+      setSyncing(false);
+      setLoaded(true);
+    }
+    loadAll();
   },[]);
 
-  useEffect(()=>{
-    if(!loaded)return;
-    store.set(SK,{txs,lang,budgets,recurring,names});
-  },[txs,lang,loaded,budgets,recurring,names]);
-
+  // Auto-add recurring transactions for current month
   useEffect(()=>{
     if(!loaded||!recurring.length)return;
     const cur=gmk(new Date());
     const seen=new Set(txs.filter(t=>t.rid).map(t=>`${t.rid}-${gmk(t.date)}`));
-    const add=recurring.filter(r=>!seen.has(`${r.id}-${cur}`)).map(r=>({
-      id:Date.now()+Math.random(),type:"expense",category:r.category,amt:r.amt,note:r.note,date:new Date().toISOString().split("T")[0],rid:r.id,person:r.person??0,
+    const toAdd=recurring.filter(r=>!seen.has(`${r.id}-${cur}`));
+    if(!toAdd.length)return;
+    const newTxs=toAdd.map(r=>({
+      id:Date.now()+Math.random(),type:"expense",category:r.category,amt:r.amt,
+      note:r.note,date:new Date().toISOString().split("T")[0],rid:r.id,person:r.person??0,
     }));
-    if(add.length)setTxs(p=>[...add,...p]);
+    // insert to supabase + local state
+    supabase.from("transactions").insert(newTxs).then(({error})=>{
+      if(!error) setTxs(p=>[...newTxs,...p]);
+    });
   },[loaded,recurring]);
 
   const pop = (msg,type="ok") => { setToast({msg,type}); setTimeout(()=>setToast(null),2800); };
 
-  // ── Derived ────────────────────────────────────────────────
+  // ── Save helpers ──────────────────────────────────────────
+  const saveSetting = async (key, value) => {
+    await supabase.from("settings").upsert({key, value}, {onConflict:"key"});
+  };
+
+  const handleSetLang = async (l) => {
+    setLang(l);
+    await saveSetting("lang", l);
+  };
+
+  const handleSetBudgets = async (fn) => {
+    setBudgets(prev => {
+      const next = typeof fn==="function"?fn(prev):fn;
+      saveSetting("budgets", next);
+      return next;
+    });
+  };
+
+  const handleSetNames = async (newNames) => {
+    setNames(newNames);
+    await saveSetting("names", newNames);
+  };
+
+  // ── Derived ───────────────────────────────────────────────
   const mTxs  = useMemo(()=>txs.filter(t=>gmk(t.date)===selMo),[txs,selMo]);
   const pvTxs = useMemo(()=>txs.filter(t=>gmk(t.date)===pmk(selMo)),[txs,selMo]);
 
@@ -242,15 +285,12 @@ export default function App() {
   const dExp = pvC.exp>0?((comb.exp-pvC.exp)/pvC.exp*100).toFixed(1):null;
   const dInc = pvC.inc>0?((comb.inc-pvC.inc)/pvC.inc*100).toFixed(1):null;
 
-  // Today's spend
-  const today = new Date().toISOString().split("T")[0];
-  const todaySpend = mTxs.filter(t=>t.date===today&&t.type==="expense").reduce((s,t)=>s+t.amt,0);
-
-  // Month forecast (daily avg * days in month)
-  const now = new Date();
-  const dayOfMonth = now.getDate();
+  const today       = new Date().toISOString().split("T")[0];
+  const todaySpend  = mTxs.filter(t=>t.date===today&&t.type==="expense").reduce((s,t)=>s+t.amt,0);
+  const now         = new Date();
+  const dayOfMonth  = now.getDate();
   const daysInMonth = new Date(now.getFullYear(),now.getMonth()+1,0).getDate();
-  const forecast = dayOfMonth>0 ? (comb.exp/dayOfMonth)*daysInMonth : 0;
+  const forecast    = dayOfMonth>0?(comb.exp/dayOfMonth)*daysInMonth:0;
 
   const catTotals = useMemo(()=>EXP_CATS.map(cat=>({
     ...cat, label:cl(cat),
@@ -286,48 +326,80 @@ export default function App() {
     };
   }),[allMos,txs,lang]);
 
-  function submit(){
+  const budgetedCats       = EXP_CATS.filter(c=>budgets[c.id]);
+  const totalBudget        = budgetedCats.reduce((s,c)=>s+budgets[c.id],0);
+  const totalSpentBudgeted = budgetedCats.reduce((s,c)=>s+mTxs.filter(t=>t.category===c.id&&t.type==="expense").reduce((ss,t)=>ss+t.amt,0),0);
+  const budgetPct          = totalBudget>0?(totalSpentBudgeted/totalBudget)*100:0;
+
+  // ── Submit transaction ────────────────────────────────────
+  async function submit(){
     const a=parseFloat(form.amount);
     if(!a||a<=0){pop(tr?"Geçerli tutar girin":"Invalid amount","err");return;}
     const cat=form.type==="income"?form.incomeCategory:form.category;
-    const tx={id:Date.now(),type:form.type,category:cat,amt:a,note:form.note,date:form.date,person:form.person};
-    if(form.isRecurring&&form.type==="expense"){
-      const r={id:Date.now()+1,category:cat,amt:a,note:form.note||cl(CATS.find(c=>c.id===cat)),person:form.person};
-      setRec(p=>[...p,r]); tx.rid=r.id;
-    }
-    setTxs(p=>[tx,...p]); setForm(false); setF(IF);
-    pop(form.isRecurring?(tr?"Sabit eklendi ✓":"Recurring added ✓"):form.type==="income"?(tr?"Gelir eklendi ✓":"Income added ✓"):(tr?"Harcama eklendi ✓":"Expense added ✓"));
+    const txId=Date.now();
+    const tx={id:txId,type:form.type,category:cat,amt:a,note:form.note,date:form.date,person:form.person};
+
+    setSyncing(true);
+    try {
+      if(form.isRecurring&&form.type==="expense"){
+        const recId=txId+1;
+        const r={id:recId,category:cat,amt:a,note:form.note||cl(CATS.find(c=>c.id===cat)),person:form.person};
+        const {error:recErr} = await supabase.from("recurring").insert([r]);
+        if(!recErr){
+          setRec(p=>[...p,r]);
+          tx.rid=recId;
+        }
+      }
+      const {error:txErr} = await supabase.from("transactions").insert([tx]);
+      if(!txErr){
+        setTxs(p=>[tx,...p]);
+        setForm(false); setF(IF);
+        pop(form.isRecurring?(tr?"Sabit eklendi ✓":"Recurring added ✓"):form.type==="income"?(tr?"Gelir eklendi ✓":"Income added ✓"):(tr?"Harcama eklendi ✓":"Expense added ✓"));
+      } else {
+        pop(tr?"Hata oluştu":"Error occurred","err");
+      }
+    } catch(e){ pop("Network error","err"); }
+    setSyncing(false);
   }
 
-  // Budget goals progress (for ring chart on overview)
-  const budgetedCats = EXP_CATS.filter(c=>budgets[c.id]);
-  const totalBudget  = budgetedCats.reduce((s,c)=>s+budgets[c.id],0);
-  const totalSpentBudgeted = budgetedCats.reduce((s,c)=>s+mTxs.filter(t=>t.category===c.id&&t.type==="expense").reduce((ss,t)=>ss+t.amt,0),0);
-  const budgetPct = totalBudget>0?(totalSpentBudgeted/totalBudget)*100:0;
+  // ── Delete transaction ────────────────────────────────────
+  async function deleteTx(id){
+    const {error} = await supabase.from("transactions").delete().eq("id",id);
+    if(!error){
+      setTxs(p=>p.filter(x=>x.id!==id));
+      pop(tr?"Silindi":"Deleted","err");
+    }
+  }
 
-  // ── Styles ─────────────────────────────────────────────────
+  // ── Styles ────────────────────────────────────────────────
   const inp = {width:"100%",background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",color:C.text,padding:"11px 14px",borderRadius:11,fontSize:14,boxSizing:"border-box",outline:"none",fontFamily:"inherit"};
   const lbl = {fontSize:10,color:C.sub,marginBottom:7,fontWeight:700,textTransform:"uppercase",letterSpacing:1.3,display:"block"};
   const sec = {fontSize:10,color:C.sub,marginBottom:14,fontWeight:700,textTransform:"uppercase",letterSpacing:1.5};
 
-  if(!loaded) return <div style={{minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",color:C.cyan,fontFamily:"'DM Sans',sans-serif"}}><div style={{textAlign:"center",fontSize:14}}><div style={{fontSize:28,marginBottom:10,filter:`drop-shadow(0 0 14px ${C.cyan})`}}>◈</div>Loading…</div></div>;
+  if(!loaded) return (
+    <div style={{minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",color:C.cyan,fontFamily:"'DM Sans',sans-serif"}}>
+      <div style={{textAlign:"center",fontSize:14}}>
+        <div style={{fontSize:28,marginBottom:10,filter:`drop-shadow(0 0 14px ${C.cyan})`}}>◈</div>
+        <div>Syncing with Supabase…</div>
+      </div>
+    </div>
+  );
 
   const SIDEBAR_W = 220;
-  const PANEL_W   = 260;
 
   return (
     <div style={{minHeight:"100vh",background:C.bg,color:C.text,fontFamily:"'DM Sans','Segoe UI',sans-serif",display:"flex",position:"relative"}}>
       <Aurora/>
 
-      {/* ══ SIDEBAR ══════════════════════════════════════════ */}
+      {/* Sync indicator */}
+      {syncing&&<div style={{position:"fixed",top:16,right:16,zIndex:1000,background:`${C.cyan}18`,border:`1px solid ${C.cyan}44`,borderRadius:10,padding:"6px 14px",fontSize:11,color:C.cyan,fontWeight:700,backdropFilter:"blur(10px)"}}>⟳ Syncing…</div>}
+
+      {/* ══ SIDEBAR ══ */}
       <div style={{width:SIDEBAR_W,minHeight:"100vh",background:C.sidebar,borderRight:`1px solid ${C.border}`,position:"fixed",top:0,left:0,zIndex:10,display:"flex",flexDirection:"column",backdropFilter:"blur(24px)"}}>
-        {/* Logo */}
         <div style={{padding:"28px 20px 20px"}}>
           <div style={{fontSize:10,letterSpacing:3,color:C.sub,textTransform:"uppercase",marginBottom:6}}>Personal Finance</div>
           <div style={{fontSize:24,fontWeight:900,letterSpacing:-1,background:`linear-gradient(135deg,${C.cyan},${C.purple})`,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>PARALOG</div>
         </div>
-
-        {/* Nav */}
         <nav style={{padding:"0 12px",flex:1}}>
           {NAV.map(n=>(
             <button key={n.id} onClick={()=>setView(n.id)} style={{width:"100%",display:"flex",alignItems:"center",gap:12,padding:"11px 12px",borderRadius:12,border:"none",cursor:"pointer",marginBottom:4,transition:"all .18s",background:view===n.id?`linear-gradient(135deg,${C.cyan}18,${C.purple}12)`:"transparent",color:view===n.id?C.cyan:C.sub,boxShadow:view===n.id?`inset 0 0 0 1px ${C.cyan}30`:"none",textAlign:"left"}}>
@@ -337,8 +409,6 @@ export default function App() {
             </button>
           ))}
         </nav>
-
-        {/* Person avatars */}
         <div style={{padding:"16px 20px",borderTop:`1px solid ${C.border}`}}>
           <div style={{fontSize:10,color:C.muted,marginBottom:10,textTransform:"uppercase",letterSpacing:1}}>Household</div>
           <div style={{display:"flex",gap:10,marginBottom:14}}>
@@ -353,20 +423,17 @@ export default function App() {
               </div>
             ))}
           </div>
-          {/* Settings + Lang */}
           <div style={{display:"flex",gap:6}}>
             <button onClick={()=>{setNameIn([...names]);setSet(true);}} style={{flex:1,padding:"8px 0",borderRadius:10,border:`1px solid ${C.border}`,background:"rgba(255,255,255,0.03)",color:C.sub,cursor:"pointer",fontSize:12}}>⚙️ {tr?"Ayarlar":"Settings"}</button>
             <div style={{display:"flex",background:"rgba(255,255,255,0.04)",border:`1px solid ${C.border}`,borderRadius:10,overflow:"hidden"}}>
-              {["en","tr"].map(l=><button key={l} onClick={()=>setLang(l)} style={{padding:"8px 10px",border:"none",cursor:"pointer",fontSize:11,fontWeight:700,background:lang===l?`${C.cyan}25`:"transparent",color:lang===l?C.cyan:C.sub}}>{l.toUpperCase()}</button>)}
+              {["en","tr"].map(l=><button key={l} onClick={()=>handleSetLang(l)} style={{padding:"8px 10px",border:"none",cursor:"pointer",fontSize:11,fontWeight:700,background:lang===l?`${C.cyan}25`:"transparent",color:lang===l?C.cyan:C.sub}}>{l.toUpperCase()}</button>)}
             </div>
           </div>
         </div>
       </div>
 
-      {/* ══ MAIN AREA ════════════════════════════════════════ */}
+      {/* ══ MAIN AREA ══ */}
       <div style={{marginLeft:SIDEBAR_W,flex:1,display:"flex",minHeight:"100vh",position:"relative",zIndex:1}}>
-
-        {/* ── Left content panel ── */}
         <div style={{flex:1,padding:"28px 24px",overflowY:"auto",minWidth:0}}>
 
           {/* Page header */}
@@ -375,7 +442,6 @@ export default function App() {
               <div style={{fontSize:22,fontWeight:900,letterSpacing:-.5}}>{tr?NAV.find(n=>n.id===view)?.label_tr:NAV.find(n=>n.id===view)?.label}</div>
               <div style={{fontSize:13,color:C.sub,marginTop:3}}>{ml(selMo)}</div>
             </div>
-            {/* Month pills */}
             <div style={{display:"flex",gap:6,overflowX:"auto",maxWidth:420}}>
               {allMos.slice(0,6).map(m=>(
                 <button key={m} onClick={()=>setSelMo(m)} style={{padding:"6px 14px",borderRadius:20,border:"none",cursor:"pointer",whiteSpace:"nowrap",fontSize:12,fontWeight:700,transition:"all .18s",background:selMo===m?`linear-gradient(135deg,${C.cyan}25,${C.purple}20)`:"rgba(255,255,255,0.04)",color:selMo===m?C.cyan:C.sub,boxShadow:selMo===m?`inset 0 0 0 1px ${C.cyan}40`:"inset 0 0 0 1px rgba(255,255,255,0.08)"}}>
@@ -388,7 +454,6 @@ export default function App() {
           {/* ── OVERVIEW ── */}
           {view==="overview"&&(
             <div>
-              {/* Top stat row */}
               <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,marginBottom:16}}>
                 {[
                   {label:tr?"Toplam Gelir":"Total Income",  val:comb.inc, color:C.green,  icon:"↑",glow:"0,232,135", diff:dInc, up:true},
@@ -405,33 +470,27 @@ export default function App() {
                   </Card>
                 ))}
               </div>
-
-              {/* Widget row */}
               <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:16}}>
-                {/* Today spend */}
                 <Card color={C.cyan} glow="0,240,255" style={{padding:"16px 18px"}}>
                   <div style={{fontSize:10,color:C.sub,fontWeight:700,textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>{tr?"Bugünkü Harcama":"Today's Spend"}</div>
                   <div style={{fontSize:20,fontWeight:800,color:C.cyan,filter:`drop-shadow(0 0 10px ${C.cyan}70)`,marginBottom:8}}>{fmt(todaySpend)}</div>
                   <div style={{fontSize:11,color:C.sub}}>{tr?"Bugün":"Today"} · {new Date().toLocaleDateString(tr?"tr-TR":"en-CA",{weekday:"short"})}</div>
                 </Card>
-                {/* Forecast */}
                 <Card color={C.orange} glow="255,136,0" style={{padding:"16px 18px"}}>
                   <div style={{fontSize:10,color:C.sub,fontWeight:700,textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>{tr?"Ay Sonu Tahmini":"Month Forecast"}</div>
                   <div style={{fontSize:20,fontWeight:800,color:C.orange,filter:`drop-shadow(0 0 10px ${C.orange}70)`,marginBottom:4}}>{fmt(forecast)}</div>
                   <GlowBar pct={(dayOfMonth/daysInMonth)*100} color={C.orange} h={3}/>
                   <div style={{fontSize:10,color:C.sub,marginTop:4}}>{tr?`${daysInMonth-dayOfMonth} gün kaldı`:`${daysInMonth-dayOfMonth} days left`}</div>
                 </Card>
-                {/* Budget ring */}
                 <Card color={C.purple} glow="185,79,255" style={{padding:"16px 18px",display:"flex",gap:12,alignItems:"center"}}>
                   <RingChart pct={budgetPct} color={budgetPct>100?C.pink:C.purple} size={64} strokeW={7}
                     label={`${Math.round(budgetPct)}%`} sublabel={tr?"bütçe":"budget"}/>
                   <div style={{minWidth:0}}>
                     <div style={{fontSize:10,color:C.sub,fontWeight:700,textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>{tr?"Hedef":"Budget Goal"}</div>
                     <div style={{fontSize:13,fontWeight:800,color:budgetPct>100?C.pink:C.purple}}>{fmt(totalSpentBudgeted)}</div>
-                    <div style={{fontSize:11,color:C.sub}}>{tr?"of":"of"} {fmt(totalBudget)}</div>
+                    <div style={{fontSize:11,color:C.sub}}>of {fmt(totalBudget)}</div>
                   </div>
                 </Card>
-                {/* Household balance */}
                 <Card color={C.green} glow="0,232,135" style={{padding:"16px 18px"}}>
                   <div style={{fontSize:10,color:C.sub,fontWeight:700,textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>{tr?"Hane Dengesi":"Household"}</div>
                   {comb.exp>0?(
@@ -448,8 +507,6 @@ export default function App() {
                   ):<div style={{fontSize:12,color:C.muted}}>{tr?"Veri yok":"No data"}</div>}
                 </Card>
               </div>
-
-              {/* Category list */}
               {catTotals.length===0?(
                 <Card style={{padding:"48px 24px",textAlign:"center"}}>
                   <div style={{fontSize:44,marginBottom:14}}>💸</div>
@@ -491,7 +548,6 @@ export default function App() {
           {/* ── PEOPLE ── */}
           {view==="people"&&(
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
-              {/* Household card (full width) */}
               <Card color={C.cyan} glow="0,240,255" style={{gridColumn:"1/-1",padding:"22px 24px",position:"relative",overflow:"hidden"}}>
                 <div style={{position:"absolute",top:-30,right:-30,width:160,height:160,borderRadius:"50%",background:`radial-gradient(circle,${C.cyan}18,transparent 70%)`,pointerEvents:"none"}}/>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:16}}>
@@ -521,7 +577,6 @@ export default function App() {
                   )}
                 </div>
               </Card>
-              {/* Per-person cards */}
               {[0,1].map(i=>(
                 <Card key={i} color={PA[i]} glow={i===0?"0,240,255":"255,45,120"} style={{padding:"20px 22px"}}>
                   <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:16}}>
@@ -562,7 +617,6 @@ export default function App() {
                   )}
                 </Card>
               ))}
-              {/* Category comparison */}
               <Card style={{gridColumn:"1/-1",padding:"20px 22px"}}>
                 <div style={sec}>{tr?"Kategori Karşılaştırması":"Category Comparison"}</div>
                 {catTotals.length===0?<div style={{textAlign:"center",color:C.sub,padding:"20px 0",fontSize:13}}>{tr?"Veri yok":"No data"}</div>:(
@@ -591,7 +645,6 @@ export default function App() {
           {/* ── ANALYTICS ── */}
           {view==="analytics"&&(
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
-              {/* Donut */}
               <Card color={C.cyan} glow="0,240,255" style={{padding:"20px 22px"}}>
                 <div style={sec}>{tr?"Kategori Dağılımı":"Category Breakdown"}</div>
                 {catTotals.length===0?<div style={{textAlign:"center",color:C.sub,padding:"30px 0"}}>{tr?"Veri yok":"No data"}</div>:(
@@ -618,7 +671,6 @@ export default function App() {
                   </>
                 )}
               </Card>
-              {/* Balance trend */}
               <Card color={C.green} glow="0,232,135" style={{padding:"20px 22px"}}>
                 <div style={sec}>{tr?"Bakiye Trendi":"Balance Trend"}</div>
                 <div style={{height:240}}>
@@ -639,7 +691,6 @@ export default function App() {
                   </ResponsiveContainer>
                 </div>
               </Card>
-              {/* Monthly trend full width */}
               <Card color={C.purple} glow="185,79,255" style={{gridColumn:"1/-1",padding:"20px 22px"}}>
                 <div style={sec}>{tr?"Kişi Bazlı Aylık Trend":"Monthly Trend by Person"}</div>
                 <div style={{height:220}}>
@@ -692,7 +743,11 @@ export default function App() {
                       {editBud===cat.id&&(
                         <div style={{marginTop:12,display:"flex",gap:6}}>
                           <input type="number" min="0" step="0.01" value={budInput} onChange={e=>setBudInput(e.target.value)} placeholder={`${CAD}0.00`} style={{...inp,flex:1,padding:"8px 10px",fontSize:13}}/>
-                          <button onClick={()=>{const v=parseFloat(budInput);if(!v||v<=0){setBudgets(b=>{const n={...b};delete n[cat.id];return n;});}else setBudgets(b=>({...b,[cat.id]:v}));setEditBud(null);}} style={{padding:"8px 14px",borderRadius:9,border:"none",background:`linear-gradient(135deg,${C.cyan},${C.purple})`,color:"#fff",fontWeight:700,cursor:"pointer",fontSize:13}}>{tr?"Kaydet":"Save"}</button>
+                          <button onClick={async ()=>{
+                            const v=parseFloat(budInput);
+                            await handleSetBudgets(b=>{const n={...b};if(!v||v<=0)delete n[cat.id];else n[cat.id]=v;return n;});
+                            setEditBud(null);
+                          }} style={{padding:"8px 14px",borderRadius:9,border:"none",background:`linear-gradient(135deg,${C.cyan},${C.purple})`,color:"#fff",fontWeight:700,cursor:"pointer",fontSize:13}}>{tr?"Kaydet":"Save"}</button>
                           <button onClick={()=>setEditBud(null)} style={{padding:"8px 10px",borderRadius:9,border:`1px solid ${C.border}`,background:"transparent",color:C.sub,cursor:"pointer"}}>✕</button>
                         </div>
                       )}
@@ -744,7 +799,7 @@ export default function App() {
                             </div>
                             <div style={{textAlign:"right",flexShrink:0}}>
                               <div style={{fontWeight:800,fontSize:16,color:tx.type==="income"?C.green:C.pink,filter:`drop-shadow(0 0 8px ${tx.type==="income"?C.green:C.pink}70)`}}>{tx.type==="income"?"+":"-"}{fmt(tx.amt)}</div>
-                              <button onClick={()=>{setTxs(p=>p.filter(x=>x.id!==tx.id));pop(tr?"Silindi":"Deleted","err");}} style={{background:"none",border:"none",cursor:"pointer",color:C.muted,fontSize:13,marginTop:3}} onMouseEnter={e=>e.currentTarget.style.color=C.pink} onMouseLeave={e=>e.currentTarget.style.color=C.muted}>✕</button>
+                              <button onClick={()=>deleteTx(tx.id)} style={{background:"none",border:"none",cursor:"pointer",color:C.muted,fontSize:13,marginTop:3}} onMouseEnter={e=>e.currentTarget.style.color=C.pink} onMouseLeave={e=>e.currentTarget.style.color=C.muted}>✕</button>
                             </div>
                           </Card>
                         );
@@ -772,18 +827,15 @@ export default function App() {
               <div style={{fontSize:20,fontWeight:800,background:`linear-gradient(135deg,${C.cyan},${C.purple})`,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>{tr?"İşlem Ekle":"Add Transaction"}</div>
               <button onClick={()=>{setForm(false);setF(IF);}} style={{background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.1)",color:C.sub,fontSize:16,cursor:"pointer",width:34,height:34,borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
             </div>
-            {/* Person */}
             <div style={{marginBottom:20}}>
               <label style={lbl}>{tr?"Kişi":"Person"}</label>
               <div style={{display:"flex",gap:10}}>
                 {[0,1].map(i=><button key={i} onClick={()=>setF(f=>({...f,person:i}))} style={{flex:1,padding:"13px 16px",borderRadius:14,cursor:"pointer",border:"none",display:"flex",alignItems:"center",justifyContent:"center",gap:10,fontWeight:700,fontSize:14,background:form.person===i?`${PA[i]}20`:"rgba(255,255,255,0.04)",color:form.person===i?PA[i]:C.sub,boxShadow:form.person===i?`inset 0 0 0 1px ${PA[i]}55,0 0 18px ${PA[i]}25`:"inset 0 0 0 1px rgba(255,255,255,0.08)",transition:"all .2s"}}><Avatar name={pn(i)} color={PA[i]} size={28} ring={form.person===i}/>{pn(i)}</button>)}
               </div>
             </div>
-            {/* Type */}
             <div style={{display:"flex",background:"rgba(255,255,255,0.04)",borderRadius:14,padding:4,marginBottom:20,border:"1px solid rgba(255,255,255,0.08)"}}>
               {["expense","income"].map(type=><button key={type} onClick={()=>setF(f=>({...f,type,category:type==="income"?"income_salary":"food_delivery",isRecurring:false}))} style={{flex:1,padding:"12px 0",border:"none",borderRadius:11,cursor:"pointer",fontSize:13,fontWeight:700,transition:"all .2s",background:form.type===type?(type==="income"?`linear-gradient(135deg,${C.green}33,${C.cyan}22)`:`linear-gradient(135deg,${C.pink}33,${C.purple}22)`):"transparent",color:form.type===type?(type==="income"?C.green:C.pink):C.sub,boxShadow:form.type===type?`inset 0 0 0 1px ${type==="income"?C.green:C.pink}44`:"none"}}>{type==="income"?`↑ ${tr?"Gelir":"Income"}`:`↓ ${tr?"Gider":"Expense"}`}</button>)}
             </div>
-            {/* Amount */}
             <div style={{marginBottom:20}}>
               <label style={lbl}>{tr?"Tutar":"Amount"} (CAD)</label>
               <div style={{position:"relative"}}>
@@ -791,22 +843,19 @@ export default function App() {
                 <input type="number" min="0" step="0.01" value={form.amount} onChange={e=>setF(f=>({...f,amount:e.target.value}))} placeholder="0.00" style={{...inp,paddingLeft:50,fontSize:22,fontWeight:800,color:form.type==="income"?C.green:C.pink}}/>
               </div>
             </div>
-            {/* Category */}
             {form.type==="expense"&&<div style={{marginBottom:20}}><label style={lbl}>{tr?"Kategori":"Category"}</label><div style={{display:"flex",flexWrap:"wrap",gap:7}}>{EXP_CATS.map(cat=><button key={cat.id} onClick={()=>setF(f=>({...f,category:cat.id}))} style={{padding:"7px 11px",borderRadius:10,cursor:"pointer",fontSize:12,fontWeight:form.category===cat.id?700:400,display:"flex",alignItems:"center",gap:5,border:"none",background:form.category===cat.id?`${cat.color}20`:"rgba(255,255,255,0.04)",color:form.category===cat.id?cat.color:C.sub,boxShadow:form.category===cat.id?`inset 0 0 0 1px ${cat.color}55,0 0 10px ${cat.color}22`:"inset 0 0 0 1px rgba(255,255,255,0.08)",transition:"all .15s"}}><span>{cat.icon}</span><span>{cl(cat)}</span></button>)}</div></div>}
             {form.type==="income"&&<div style={{marginBottom:20}}><label style={lbl}>{tr?"Gelir Kaynağı":"Income Source"}</label><div style={{display:"flex",gap:8}}>{INC_CATS.map(cat=><button key={cat.id} onClick={()=>setF(f=>({...f,incomeCategory:cat.id}))} style={{flex:1,padding:"12px 8px",borderRadius:12,cursor:"pointer",fontSize:13,fontWeight:form.incomeCategory===cat.id?700:400,display:"flex",alignItems:"center",justifyContent:"center",gap:7,border:"none",background:form.incomeCategory===cat.id?`${cat.color}20`:"rgba(255,255,255,0.04)",color:form.incomeCategory===cat.id?cat.color:C.sub,boxShadow:form.incomeCategory===cat.id?`inset 0 0 0 1px ${cat.color}55,0 0 12px ${cat.color}28`:"inset 0 0 0 1px rgba(255,255,255,0.08)"}}><span style={{fontSize:18}}>{cat.icon}</span><span>{cl(cat)}</span></button>)}</div></div>}
-            {/* Note + Date */}
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:20}}>
               <div><label style={lbl}>{tr?"Not":"Note"}</label><input type="text" value={form.note} onChange={e=>setF(f=>({...f,note:e.target.value}))} placeholder={tr?"Opsiyonel...":"Optional..."} style={inp}/></div>
               <div><label style={lbl}>{tr?"Tarih":"Date"}</label><input type="date" value={form.date} onChange={e=>setF(f=>({...f,date:e.target.value}))} style={inp}/></div>
             </div>
-            {/* Recurring */}
             {form.type==="expense"&&<div onClick={()=>setF(f=>({...f,isRecurring:!f.isRecurring}))} style={{display:"flex",alignItems:"center",gap:14,marginBottom:24,padding:"14px 16px",borderRadius:14,cursor:"pointer",background:form.isRecurring?`${C.cyan}0e`:"rgba(255,255,255,0.03)",border:`1px solid ${form.isRecurring?C.cyan+"44":"rgba(255,255,255,0.08)"}`,transition:"all .2s"}}>
               <div style={{width:24,height:24,borderRadius:7,border:`2px solid ${form.isRecurring?C.cyan:"rgba(255,255,255,0.2)"}`,background:form.isRecurring?`linear-gradient(135deg,${C.cyan},${C.purple})`:"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:form.isRecurring?`0 0 12px ${C.cyan}50`:"none",transition:"all .2s"}}>{form.isRecurring&&<span style={{color:"#fff",fontSize:14,fontWeight:900}}>✓</span>}</div>
               <div><div style={{fontWeight:700,fontSize:13,color:form.isRecurring?C.cyan:C.text}}>🔁 {tr?"Her ay tekrarlayan işlem":"Recurring monthly transaction"}</div><div style={{fontSize:11,color:C.sub,marginTop:2}}>{tr?"Her ay otomatik eklenir":"Auto-added every month"}</div></div>
             </div>}
             <div style={{display:"flex",gap:12}}>
               <button onClick={()=>{setForm(false);setF(IF);}} style={{flex:1,padding:"14px 0",borderRadius:14,border:"1px solid rgba(255,255,255,0.1)",background:"rgba(255,255,255,0.04)",color:C.sub,fontSize:15,fontWeight:700,cursor:"pointer"}}>{tr?"İptal":"Cancel"}</button>
-              <button onClick={submit} style={{flex:2,padding:"14px 0",borderRadius:14,border:"none",background:`linear-gradient(135deg,${C.cyan},${C.purple})`,color:"#fff",fontSize:15,fontWeight:700,cursor:"pointer",boxShadow:`0 0 24px ${C.cyan}40`}}>{tr?"Kaydet":"Save"}</button>
+              <button onClick={submit} disabled={syncing} style={{flex:2,padding:"14px 0",borderRadius:14,border:"none",background:`linear-gradient(135deg,${C.cyan},${C.purple})`,color:"#fff",fontSize:15,fontWeight:700,cursor:"pointer",boxShadow:`0 0 24px ${C.cyan}40`,opacity:syncing?.7:1}}>{syncing?(tr?"Kaydediliyor...":"Saving..."):(tr?"Kaydet":"Save")}</button>
             </div>
           </div>
         </div>
@@ -828,7 +877,7 @@ export default function App() {
             ))}
             <div style={{display:"flex",gap:10,marginTop:8}}>
               <button onClick={()=>setSet(false)} style={{flex:1,padding:"13px 0",borderRadius:14,border:"1px solid rgba(255,255,255,0.1)",background:"transparent",color:C.sub,fontSize:14,fontWeight:700,cursor:"pointer"}}>{tr?"İptal":"Cancel"}</button>
-              <button onClick={()=>{setNames([nameIn[0]||DN[0],nameIn[1]||DN[1]]);setSet(false);pop(tr?"Kaydedildi ✓":"Saved ✓");}} style={{flex:2,padding:"13px 0",borderRadius:14,border:"none",background:`linear-gradient(135deg,${C.cyan},${C.purple})`,color:"#fff",fontSize:14,fontWeight:700,cursor:"pointer"}}>{tr?"Kaydet":"Save"}</button>
+              <button onClick={async()=>{await handleSetNames([nameIn[0]||DN[0],nameIn[1]||DN[1]]);setSet(false);pop(tr?"Kaydedildi ✓":"Saved ✓");}} style={{flex:2,padding:"13px 0",borderRadius:14,border:"none",background:`linear-gradient(135deg,${C.cyan},${C.purple})`,color:"#fff",fontSize:14,fontWeight:700,cursor:"pointer"}}>{tr?"Kaydet":"Save"}</button>
             </div>
           </div>
         </div>
