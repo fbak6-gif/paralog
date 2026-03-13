@@ -209,6 +209,8 @@ export default function App(){
   const [nameIn,setNameIn]     = useState(DN);
   const [form,setF]            = useState(IF);
   const [analyticsTab,setAnalyticsTab] = useState("monthly");
+  const [sidebarOpen,setSidebar]       = useState(true);
+  const [showReset,setShowReset]       = useState(false);
 
   const tr = lang==="tr";
   const mo = tr?MO_TR:MO;
@@ -421,7 +423,45 @@ export default function App(){
     pop(tr?"Silindi":"Deleted","err");
   }
 
-  const inp={width:"100%",background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",color:C.text,padding:"11px 14px",borderRadius:11,fontSize:14,boxSizing:"border-box",outline:"none",fontFamily:"inherit"};
+  // ── Excel Export ──────────────────────────────────────────
+  function exportExcel(){
+    const rows=[["Date","Type","Category","Amount","Note","Person","Transfer"]];
+    txs.forEach(t=>{
+      const cat=CATS.find(c=>c.id===t.category);
+      rows.push([
+        t.date,
+        t.type,
+        cat?(tr?cat.label_tr:cat.label):t.category,
+        t.amt,
+        t.note||"",
+        t.person===2?"Household":pn(t.person??0),
+        t.transfer_id?"Yes":"No",
+      ]);
+    });
+    const csv=rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(",")).join("\n");
+    const blob=new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8;"});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");
+    a.href=url; a.download=`paralog_${selMo}.csv`; a.click();
+    URL.revokeObjectURL(url);
+    pop(tr?"Export edildi ✓":"Exported ✓");
+  }
+
+  // ── Reset All Data ────────────────────────────────────────
+  async function resetAll(){
+    setSyncing(true);
+    try{
+      await supabase.from("transactions").delete().neq("id",0);
+      await supabase.from("recurring").delete().neq("id",0);
+      setTxs([]); setRec([]); setBudgets({});
+      await saveSetting("budgets",{});
+      setShowReset(false);
+      pop(tr?"Tüm veriler silindi":"All data cleared","err");
+    }catch(e){ pop("Error","err"); }
+    setSyncing(false);
+  }
+
+background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.1)",color:C.text,padding:"11px 14px",borderRadius:11,fontSize:14,boxSizing:"border-box",outline:"none",fontFamily:"inherit"};
   const lbl={fontSize:10,color:C.sub,marginBottom:7,fontWeight:700,textTransform:"uppercase",letterSpacing:1.3,display:"block"};
   const sec={fontSize:10,color:C.sub,marginBottom:14,fontWeight:700,textTransform:"uppercase",letterSpacing:1.5};
 
@@ -434,7 +474,7 @@ export default function App(){
     </div>
   );
 
-  const SIDEBAR_W=220;
+  const SIDEBAR_W = sidebarOpen ? 220 : 64;
 
   return (
     <div style={{minHeight:"100vh",background:C.bg,color:C.text,fontFamily:"'DM Sans','Segoe UI',sans-serif",display:"flex",position:"relative"}}>
@@ -442,45 +482,60 @@ export default function App(){
       {syncing&&<div style={{position:"fixed",top:16,right:16,zIndex:1000,background:`${C.cyan}18`,border:`1px solid ${C.cyan}44`,borderRadius:10,padding:"6px 14px",fontSize:11,color:C.cyan,fontWeight:700,backdropFilter:"blur(10px)"}}>⟳ Syncing…</div>}
 
       {/* ══ SIDEBAR ══ */}
-      <div style={{width:SIDEBAR_W,minHeight:"100vh",background:C.sidebar,borderRight:`1px solid ${C.border}`,position:"fixed",top:0,left:0,zIndex:10,display:"flex",flexDirection:"column",backdropFilter:"blur(24px)"}}>
-        <div style={{padding:"28px 20px 20px"}}>
-          <div style={{fontSize:10,letterSpacing:3,color:C.sub,textTransform:"uppercase",marginBottom:6}}>Personal Finance</div>
-          <div style={{fontSize:24,fontWeight:900,letterSpacing:-1,background:`linear-gradient(135deg,${C.cyan},${C.purple})`,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>PARALOG</div>
+      <div style={{width:SIDEBAR_W,minHeight:"100vh",background:C.sidebar,borderRight:`1px solid ${C.border}`,position:"fixed",top:0,left:0,zIndex:10,display:"flex",flexDirection:"column",backdropFilter:"blur(24px)",transition:"width .25s ease",overflow:"hidden"}}>
+        {/* Toggle button */}
+        <button onClick={()=>setSidebar(o=>!o)} style={{position:"absolute",top:18,right:10,width:28,height:28,borderRadius:8,border:`1px solid ${C.border}`,background:"rgba(255,255,255,0.05)",color:C.sub,cursor:"pointer",fontSize:13,display:"flex",alignItems:"center",justifyContent:"center",zIndex:20,flexShrink:0,transition:"all .2s"}} title={sidebarOpen?"Collapse":"Expand"}>
+          {sidebarOpen?"‹":"›"}
+        </button>
+
+        <div style={{padding:sidebarOpen?"28px 20px 20px":"20px 10px 20px",transition:"padding .25s",overflow:"hidden",whiteSpace:"nowrap"}}>
+          {sidebarOpen&&<div style={{fontSize:10,letterSpacing:3,color:C.sub,textTransform:"uppercase",marginBottom:6}}>Personal Finance</div>}
+          <div style={{fontSize:sidebarOpen?24:18,fontWeight:900,letterSpacing:-1,background:`linear-gradient(135deg,${C.cyan},${C.purple})`,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>{sidebarOpen?"PARALOG":"P"}</div>
         </div>
-        <nav style={{padding:"0 12px",flex:1}}>
+        <nav style={{padding:"0 8px",flex:1}}>
           {NAV.map(n=>(
-            <button key={n.id} onClick={()=>setView(n.id)} style={{width:"100%",display:"flex",alignItems:"center",gap:12,padding:"11px 12px",borderRadius:12,border:"none",cursor:"pointer",marginBottom:4,transition:"all .18s",background:view===n.id?`linear-gradient(135deg,${C.cyan}18,${C.purple}12)`:"transparent",color:view===n.id?C.cyan:C.sub,boxShadow:view===n.id?`inset 0 0 0 1px ${C.cyan}30`:"none",textAlign:"left"}}>
-              <span style={{fontSize:16,width:20,textAlign:"center"}}>{n.icon}</span>
-              <span style={{fontSize:13,fontWeight:700}}>{tr?n.label_tr:n.label}</span>
-              {view===n.id&&<div style={{marginLeft:"auto",width:4,height:4,borderRadius:"50%",background:C.cyan,boxShadow:`0 0 6px ${C.cyan}`}}/>}
+            <button key={n.id} onClick={()=>setView(n.id)} title={tr?n.label_tr:n.label} style={{width:"100%",display:"flex",alignItems:"center",gap:12,padding:sidebarOpen?"11px 12px":"11px 0",justifyContent:sidebarOpen?"flex-start":"center",borderRadius:12,border:"none",cursor:"pointer",marginBottom:4,transition:"all .18s",background:view===n.id?`linear-gradient(135deg,${C.cyan}18,${C.purple}12)`:"transparent",color:view===n.id?C.cyan:C.sub,boxShadow:view===n.id?`inset 0 0 0 1px ${C.cyan}30`:"none",textAlign:"left",overflow:"hidden",whiteSpace:"nowrap"}}>
+              <span style={{fontSize:16,width:20,textAlign:"center",flexShrink:0}}>{n.icon}</span>
+              {sidebarOpen&&<span style={{fontSize:13,fontWeight:700}}>{tr?n.label_tr:n.label}</span>}
+              {sidebarOpen&&view===n.id&&<div style={{marginLeft:"auto",width:4,height:4,borderRadius:"50%",background:C.cyan,boxShadow:`0 0 6px ${C.cyan}`}}/>}
             </button>
           ))}
         </nav>
-        <div style={{padding:"16px 20px",borderTop:`1px solid ${C.border}`}}>
-          <div style={{fontSize:10,color:C.muted,marginBottom:10,textTransform:"uppercase",letterSpacing:1}}>Household</div>
-          <div style={{display:"flex",gap:6,marginBottom:14,flexDirection:"column"}}>
+        <div style={{padding:sidebarOpen?"16px 20px":"12px 8px",borderTop:`1px solid ${C.border}`,transition:"padding .25s"}}>
+          {sidebarOpen&&<div style={{fontSize:10,color:C.muted,marginBottom:10,textTransform:"uppercase",letterSpacing:1}}>Household</div>}
+          <div style={{display:"flex",gap:6,marginBottom:sidebarOpen?14:10,flexDirection:"column"}}>
             {[0,1,2].map(i=>(
-              <div key={i} style={{background:`${PA[i]}0d`,border:`1px solid ${PA[i]}25`,borderRadius:10,padding:"7px 10px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                <div style={{display:"flex",alignItems:"center",gap:6}}>
-                  <div style={{fontSize:i===2?13:11}}>{i===2?"🏠":""}</div>
-                  {i<2&&<Avatar name={pn(i)} color={PA[i]} size={20}/>}
-                  <span style={{fontSize:11,fontWeight:700,color:PA[i]}}>{i===2?(tr?"Hane":"House"):pn(i)}</span>
-                </div>
-                <div style={{fontSize:12,fontWeight:800,color:pS[i].bal>=0?C.green:C.pink}}>{fmtS(pS[i].bal)}</div>
+              <div key={i} style={{background:`${PA[i]}0d`,border:`1px solid ${PA[i]}25`,borderRadius:10,padding:sidebarOpen?"7px 10px":"7px 0",display:"flex",justifyContent:sidebarOpen?"space-between":"center",alignItems:"center",overflow:"hidden"}}>
+                {sidebarOpen?(
+                  <>
+                    <div style={{display:"flex",alignItems:"center",gap:6}}>
+                      <div style={{fontSize:i===2?13:11}}>{i===2?"🏠":""}</div>
+                      {i<2&&<Avatar name={pn(i)} color={PA[i]} size={20}/>}
+                      <span style={{fontSize:11,fontWeight:700,color:PA[i]}}>{i===2?(tr?"Hane":"House"):pn(i)}</span>
+                    </div>
+                    <div style={{fontSize:12,fontWeight:800,color:pS[i].bal>=0?C.green:C.pink}}>{fmtS(pS[i].bal)}</div>
+                  </>
+                ):(
+                  <div title={`${i===2?"House":pn(i)}: ${fmtS(pS[i].bal)}`} style={{width:8,height:8,borderRadius:"50%",background:PA[i]}}/>
+                )}
               </div>
             ))}
           </div>
-          <div style={{display:"flex",gap:6}}>
-            <button onClick={()=>{setNameIn([...names]);setSet(true);}} style={{flex:1,padding:"8px 0",borderRadius:10,border:`1px solid ${C.border}`,background:"rgba(255,255,255,0.03)",color:C.sub,cursor:"pointer",fontSize:12}}>⚙️ {tr?"Ayarlar":"Settings"}</button>
-            <div style={{display:"flex",background:"rgba(255,255,255,0.04)",border:`1px solid ${C.border}`,borderRadius:10,overflow:"hidden"}}>
-              {["en","tr"].map(l=><button key={l} onClick={()=>handleSetLang(l)} style={{padding:"8px 10px",border:"none",cursor:"pointer",fontSize:11,fontWeight:700,background:lang===l?`${C.cyan}25`:"transparent",color:lang===l?C.cyan:C.sub}}>{l.toUpperCase()}</button>)}
+          {sidebarOpen?(
+            <div style={{display:"flex",gap:6}}>
+              <button onClick={()=>{setNameIn([...names]);setSet(true);}} style={{flex:1,padding:"8px 0",borderRadius:10,border:`1px solid ${C.border}`,background:"rgba(255,255,255,0.03)",color:C.sub,cursor:"pointer",fontSize:12}}>⚙️ {tr?"Ayarlar":"Settings"}</button>
+              <div style={{display:"flex",background:"rgba(255,255,255,0.04)",border:`1px solid ${C.border}`,borderRadius:10,overflow:"hidden"}}>
+                {["en","tr"].map(l=><button key={l} onClick={()=>handleSetLang(l)} style={{padding:"8px 10px",border:"none",cursor:"pointer",fontSize:11,fontWeight:700,background:lang===l?`${C.cyan}25`:"transparent",color:lang===l?C.cyan:C.sub}}>{l.toUpperCase()}</button>)}
+              </div>
             </div>
-          </div>
+          ):(
+            <button onClick={()=>{setNameIn([...names]);setSet(true);}} title="Settings" style={{width:"100%",padding:"8px 0",borderRadius:10,border:`1px solid ${C.border}`,background:"rgba(255,255,255,0.03)",color:C.sub,cursor:"pointer",fontSize:14}}>⚙️</button>
+          )}
         </div>
       </div>
 
       {/* ══ MAIN ══ */}
-      <div style={{marginLeft:SIDEBAR_W,flex:1,display:"flex",minHeight:"100vh",position:"relative",zIndex:1}}>
+      <div style={{marginLeft:SIDEBAR_W,flex:1,display:"flex",minHeight:"100vh",position:"relative",zIndex:1,transition:"margin-left .25s ease"}}>
         <div style={{flex:1,padding:"28px 24px",overflowY:"auto",minWidth:0}}>
 
           {/* Header */}
@@ -1161,8 +1216,10 @@ export default function App(){
       {/* SETTINGS */}
       {showSet&&(
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.82)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(10px)",padding:20}} onClick={e=>{if(e.target===e.currentTarget)setSet(false);}}>
-          <div style={{background:"rgba(6,9,20,0.98)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:24,padding:32,width:"100%",maxWidth:360,backdropFilter:"blur(30px)"}}>
+          <div style={{background:"rgba(6,9,20,0.98)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:24,padding:32,width:"100%",maxWidth:400,backdropFilter:"blur(30px)"}}>
             <div style={{fontSize:18,fontWeight:800,marginBottom:24,background:`linear-gradient(135deg,${C.cyan},${C.purple})`,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>⚙️ {tr?"Ayarlar":"Settings"}</div>
+
+            {/* Name inputs */}
             {[0,1].map(i=>(
               <div key={i} style={{marginBottom:16}}>
                 <label style={{fontSize:10,color:PA[i],marginBottom:7,fontWeight:700,textTransform:"uppercase",letterSpacing:1.3,display:"block"}}>{tr?"Kişi":"Person"} {i+1}</label>
@@ -1172,9 +1229,42 @@ export default function App(){
                 </div>
               </div>
             ))}
-            <div style={{display:"flex",gap:10,marginTop:8}}>
-              <button onClick={()=>setSet(false)} style={{flex:1,padding:"13px 0",borderRadius:14,border:"1px solid rgba(255,255,255,0.1)",background:"transparent",color:C.sub,fontSize:14,fontWeight:700,cursor:"pointer"}}>{tr?"İptal":"Cancel"}</button>
-              <button onClick={async()=>{await handleSetNames([nameIn[0]||DN[0],nameIn[1]||DN[1],tr?"Hane":"Household"]);setSet(false);pop(tr?"Kaydedildi ✓":"Saved ✓");}} style={{flex:2,padding:"13px 0",borderRadius:14,border:"none",background:`linear-gradient(135deg,${C.cyan},${C.purple})`,color:"#fff",fontSize:14,fontWeight:700,cursor:"pointer"}}>{tr?"Kaydet":"Save"}</button>
+
+            {/* Language */}
+            <div style={{marginBottom:20}}>
+              <label style={{fontSize:10,color:C.sub,marginBottom:8,fontWeight:700,textTransform:"uppercase",letterSpacing:1.3,display:"block"}}>{tr?"Dil":"Language"}</label>
+              <div style={{display:"flex",gap:8}}>
+                {["en","tr"].map(l=><button key={l} onClick={()=>handleSetLang(l)} style={{flex:1,padding:"10px",borderRadius:10,border:"none",cursor:"pointer",fontWeight:700,fontSize:13,background:lang===l?`${C.cyan}22`:"rgba(255,255,255,0.04)",color:lang===l?C.cyan:C.sub,boxShadow:lang===l?`inset 0 0 0 1px ${C.cyan}44`:"inset 0 0 0 1px rgba(255,255,255,0.08)"}}>{l==="en"?"🇨🇦 English":"🇹🇷 Türkçe"}</button>)}
+              </div>
+            </div>
+
+            {/* Divider */}
+            <div style={{height:1,background:C.border,margin:"20px 0"}}/>
+
+            {/* Excel Export */}
+            <button onClick={()=>{exportExcel();setSet(false);}} style={{width:"100%",padding:"13px 0",borderRadius:14,border:`1px solid ${C.green}44`,background:`${C.green}0d`,color:C.green,fontSize:14,fontWeight:700,cursor:"pointer",marginBottom:10,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+              📊 {tr?"Excel / CSV Export":"Export to Excel / CSV"}
+            </button>
+
+            {/* Reset */}
+            {!showReset?(
+              <button onClick={()=>setShowReset(true)} style={{width:"100%",padding:"13px 0",borderRadius:14,border:`1px solid ${C.pink}44`,background:`${C.pink}0d`,color:C.pink,fontSize:14,fontWeight:700,cursor:"pointer",marginBottom:20,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+                🗑️ {tr?"Tüm Veriyi Sıfırla":"Reset All Data"}
+              </button>
+            ):(
+              <div style={{background:`${C.pink}0d`,border:`1px solid ${C.pink}44`,borderRadius:14,padding:"16px",marginBottom:20}}>
+                <div style={{fontSize:13,fontWeight:700,color:C.pink,marginBottom:6}}>⚠️ {tr?"Emin misin?":"Are you sure?"}</div>
+                <div style={{fontSize:12,color:C.sub,marginBottom:14}}>{tr?"Tüm işlemler ve tekrarlayan giderler silinecek. Bu işlem geri alınamaz.":"All transactions and recurring entries will be permanently deleted."}</div>
+                <div style={{display:"flex",gap:8}}>
+                  <button onClick={()=>setShowReset(false)} style={{flex:1,padding:"10px",borderRadius:11,border:`1px solid ${C.border}`,background:"transparent",color:C.sub,cursor:"pointer",fontWeight:700}}>{tr?"Vazgeç":"Cancel"}</button>
+                  <button onClick={resetAll} style={{flex:1,padding:"10px",borderRadius:11,border:"none",background:C.pink,color:"#fff",cursor:"pointer",fontWeight:700,fontSize:13}}>{tr?"Evet, Sil":"Yes, Delete All"}</button>
+                </div>
+              </div>
+            )}
+
+            <div style={{display:"flex",gap:10}}>
+              <button onClick={()=>{setSet(false);setShowReset(false);}} style={{flex:1,padding:"13px 0",borderRadius:14,border:"1px solid rgba(255,255,255,0.1)",background:"transparent",color:C.sub,fontSize:14,fontWeight:700,cursor:"pointer"}}>{tr?"İptal":"Cancel"}</button>
+              <button onClick={async()=>{await handleSetNames([nameIn[0]||DN[0],nameIn[1]||DN[1],tr?"Hane":"Household"]);setSet(false);setShowReset(false);pop(tr?"Kaydedildi ✓":"Saved ✓");}} style={{flex:2,padding:"13px 0",borderRadius:14,border:"none",background:`linear-gradient(135deg,${C.cyan},${C.purple})`,color:"#fff",fontSize:14,fontWeight:700,cursor:"pointer"}}>{tr?"Kaydet":"Save"}</button>
             </div>
           </div>
         </div>
