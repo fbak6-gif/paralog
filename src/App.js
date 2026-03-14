@@ -249,7 +249,7 @@ export default function App() {
   const mTxs  = useMemo(()=>txs.filter(t=>gmk(t.date)===selMo),[txs,selMo]);
   const pvTxs = useMemo(()=>txs.filter(t=>gmk(t.date)===pmk(selMo)),[txs,selMo]);
 
-  // Transfers excluded from totals (internal money move, not real income/expense)
+  // Household totals: transfers cancel out so exclude from totals
   const S = (arr,pf="all") => {
     const f = pf==="all"?arr:arr.filter(t=>t.person===pf);
     const noTr = f.filter(t=>t.category!=="transfer");
@@ -257,8 +257,19 @@ export default function App() {
     const exp = noTr.filter(t=>t.type==="expense").reduce((s,t)=>s+t.amt,0);
     return {inc,exp,bal:inc-exp};
   };
+  // Per-person: include transfer effect (sender -amt, receiver +amt)
+  const Sp = (arr,pi) => {
+    const f = arr.filter(t=>t.person===pi);
+    const noTr = f.filter(t=>t.category!=="transfer");
+    const inc   = noTr.filter(t=>t.type==="income").reduce((s,t)=>s+t.amt,0);
+    const exp   = noTr.filter(t=>t.type==="expense").reduce((s,t)=>s+t.amt,0);
+    const trOut = f.filter(t=>t.category==="transfer"&&t.type==="expense").reduce((s,t)=>s+t.amt,0);
+    const trIn  = f.filter(t=>t.category==="transfer"&&t.type==="income").reduce((s,t)=>s+t.amt,0);
+    // inc/exp show real income/expense only; bal includes transfer effect
+    return {inc, exp, bal: inc - exp - trOut + trIn};
+  };
   const comb = useMemo(()=>S(mTxs),[mTxs]);
-  const pS   = useMemo(()=>[0,1,2].map(i=>i===2?S(mTxs):S(mTxs,i)),[mTxs]);
+  const pS   = useMemo(()=>[0,1,2].map(i=>i===2?S(mTxs):Sp(mTxs,i)),[mTxs]);
   const pvC  = useMemo(()=>S(pvTxs),[pvTxs]);
   const dExp = pvC.exp>0?((comb.exp-pvC.exp)/pvC.exp*100).toFixed(1):null;
   const dInc = pvC.inc>0?((comb.inc-pvC.inc)/pvC.inc*100).toFixed(1):null;
